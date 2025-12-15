@@ -15,28 +15,27 @@ const ERC20_ABI = [
 
 export default function Page() {
   const [total, setTotal] = useState<number>(0);
-  const [hourly, setHourly] = useState<number>(0);
-  const [daily, setDaily] = useState<number>(0);
+  const [hourlyChange, setHourlyChange] = useState<number>(0);
+  const [dailyChange, setDailyChange] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<string>("");
+  const [usdcAmount, setUsdcAmount] = useState<number>(0);
+  const [usdtAmount, setUsdtAmount] = useState<number>(0);
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 60000); // Update every minute
+    const interval = setInterval(load, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
   async function load() {
     if (!process.env.NEXT_PUBLIC_RPC) {
-      setError("RPC endpoint not configured");
+      console.error("RPC endpoint not configured");
       setLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
-      setError(null);
-      
       const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC);
       const usdc = new ethers.Contract(USDC, ERC20_ABI, provider);
       const usdt = new ethers.Contract(USDT, ERC20_ABI, provider);
@@ -50,146 +49,199 @@ export default function Page() {
       const usdtValue = Number(ethers.formatUnits(usdtBal, 6));
       const value = usdcValue + usdtValue;
       
+      setUsdcAmount(usdcValue);
+      setUsdtAmount(usdtValue);
       setTotal(value);
 
-      // Only access localStorage in browser environment
+      // Calculate changes
       if (typeof window !== 'undefined') {
-        const storedHour = localStorage.getItem("gensyn_hourly");
-        const storedDay = localStorage.getItem("gensyn_daily");
-        
-        const lastHour = storedHour ? parseFloat(storedHour) : value;
-        const lastDay = storedDay ? parseFloat(storedDay) : value;
-        
-        setHourly(parseFloat((value - lastHour).toFixed(2)));
-        setDaily(parseFloat((value - lastDay).toFixed(2)));
-        
-        // Store current value for next comparison
-        localStorage.setItem("gensyn_hourly", value.toString());
-        
-        // Reset daily value at midnight UTC
         const now = new Date();
-        if (now.getUTCHours() === 0 && now.getUTCMinutes() < 1) {
-          localStorage.setItem("gensyn_daily", value.toString());
+        const currentHour = now.getHours();
+        
+        // Get stored values
+        const storedHourly = localStorage.getItem("gensyn_hourly_value");
+        const storedHourlyTime = localStorage.getItem("gensyn_hourly_time");
+        
+        const storedDaily = localStorage.getItem("gensyn_daily_value");
+        const storedDailyDate = localStorage.getItem("gensyn_daily_date");
+
+        // Calculate hourly change (if same hour)
+        if (storedHourly && storedHourlyTime) {
+          const storedHour = parseInt(storedHourlyTime);
+          if (storedHour === currentHour) {
+            setHourlyChange(value - parseFloat(storedHourly));
+          } else {
+            setHourlyChange(0);
+          }
+        }
+
+        // Calculate daily change (if same day)
+        const currentDate = now.getDate();
+        if (storedDaily && storedDailyDate) {
+          const storedDate = parseInt(storedDailyDate);
+          if (storedDate === currentDate) {
+            setDailyChange(value - parseFloat(storedDaily));
+          } else {
+            setDailyChange(0);
+          }
+        }
+
+        // Store current values
+        localStorage.setItem("gensyn_hourly_value", value.toString());
+        localStorage.setItem("gensyn_hourly_time", currentHour.toString());
+        
+        // Reset daily at midnight
+        if (now.getHours() === 0 && now.getMinutes() < 1) {
+          localStorage.setItem("gensyn_daily_value", value.toString());
+          localStorage.setItem("gensyn_daily_date", currentDate.toString());
+        } else if (!storedDailyDate) {
+          localStorage.setItem("gensyn_daily_value", value.toString());
+          localStorage.setItem("gensyn_daily_date", currentDate.toString());
         }
       }
+
+      setLastUpdate(now.toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }));
     } catch (err) {
       console.error("Failed to load sale data:", err);
-      setError("Failed to fetch sale data. Check RPC configuration.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#0b0620] via-[#1a1240] to-[#0b1b2a] text-white flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl rounded-3xl p-6 md:p-10 bg-white/5 backdrop-blur-xl shadow-2xl border border-white/10">
-        <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-          <h1 className="text-3xl md:text-4xl font-bold text-violet-300 text-center md:text-left">
-            Gensyn Public Sale Tracker
+    <main className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0f0f1a] to-[#0a0a14] text-white p-4 md:p-8">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            Gensyn Public Sale
           </h1>
+          <p className="text-gray-400 text-lg">Real-time investment tracker for $GENSYN on Sonar</p>
+        </div>
+
+        {/* Follow Button */}
+        <div className="flex justify-center mb-10">
           <a
             href="https://x.com/0xzackhq"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-6 py-3 rounded-full bg-violet-600 hover:bg-violet-500 transition-colors font-medium"
+            className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-full font-semibold transition-all transform hover:scale-105 shadow-lg"
           >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
             Follow @0xzackhq
           </a>
         </div>
 
-        <p className="text-gray-400 mb-2 text-center md:text-left">
-          Live tracking (Ethereum Mainnet)
-        </p>
-
-        {error && (
-          <div className="my-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30">
-            <p className="text-red-300">{error}</p>
-            <p className="text-sm text-red-400/80 mt-1">
-              Make sure NEXT_PUBLIC_RPC is set in Vercel environment variables
-            </p>
+        {/* Live Status */}
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex items-center gap-2 px-5 py-2 bg-green-500/10 border border-green-500/30 rounded-full">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <span className="text-green-400 font-semibold">SALE IS LIVE</span>
           </div>
-        )}
+        </div>
 
-        <div className="text-center my-12">
-          <div className="text-sm text-green-400 mb-1 flex items-center justify-center gap-2">
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-            SALE IS LIVE • UPDATING EVERY MINUTE
+        {/* Main Stats Card */}
+        <div className="bg-[#1a1a2e]/80 backdrop-blur-xl rounded-2xl border border-white/10 p-8 mb-10 shadow-2xl">
+          {/* Total Invested */}
+          <div className="text-center mb-12">
+            <div className="text-gray-400 text-sm uppercase tracking-wider mb-3">TOTAL INVESTED</div>
+            <div className="text-6xl md:text-7xl font-bold mb-3">
+              {loading ? (
+                <div className="animate-pulse">
+                  <span className="text-gray-600">$--,---,---</span>
+                </div>
+              ) : (
+                <span className="bg-gradient-to-r from-blue-300 to-purple-300 bg-clip-text text-transparent">
+                  ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
+            <div className="text-gray-400">USDC + USDT</div>
           </div>
-          <div className="text-5xl md:text-6xl font-extrabold text-pink-400 my-4">
-            {loading && total === 0 ? (
-              <div className="inline-block">
-                <span className="opacity-50">$--,--</span>
-                <span className="ml-2 text-2xl">⏳</span>
+
+          {/* Token Breakdown */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            <div className="bg-white/5 rounded-xl p-6 border border-white/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-gray-400">USDC</div>
+                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-xs">U</div>
               </div>
-            ) : (
-              `$${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            )}
+              <div className="text-2xl font-semibold">
+                ${usdcAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            
+            <div className="bg-white/5 rounded-xl p-6 border border-white/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-gray-400">USDT</div>
+                <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-xs">T</div>
+              </div>
+              <div className="text-2xl font-semibold">
+                ${usdtAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
           </div>
-          <div className="text-gray-400 mt-1">USDC + USDT committed</div>
+
+          {/* Change Indicators */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Hourly Change */}
+            <div className="text-center">
+              <div className="text-gray-400 text-sm mb-2">Hourly Change</div>
+              <div className={`text-3xl font-bold ${hourlyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {hourlyChange >= 0 ? '+' : ''}${Math.abs(hourlyChange).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="text-gray-500 text-sm mt-2">Updated: {lastUpdate}</div>
+            </div>
+
+            {/* Daily Change */}
+            <div className="text-center">
+              <div className="text-gray-400 text-sm mb-2">Daily Change</div>
+              <div className={`text-3xl font-bold ${dailyChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {dailyChange >= 0 ? '+' : ''}${Math.abs(dailyChange).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="text-gray-500 text-sm mt-2">Since midnight UTC</div>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          <Stat 
-            label="Hourly Change" 
-            value={hourly} 
-            loading={loading}
-          />
-          <Stat 
-            label="Daily Change" 
-            value={daily} 
-            loading={loading}
-          />
-          <div className="rounded-2xl bg-white/5 p-6 text-center border border-white/10">
-            <div className="text-gray-400 text-sm mb-2">Network</div>
-            <div className="text-xl font-semibold text-blue-400">Ethereum</div>
-            <div className="text-xs text-gray-500 mt-2">Mainnet</div>
-          </div>
-        </div>
-
-        <div className="mt-10 pt-8 border-t border-white/10">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500">
+        {/* Footer Info */}
+        <div className="text-center text-gray-500 text-sm space-y-2">
+          <div className="flex flex-wrap justify-center items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+              <span>Network: Sonar</span>
+            </div>
+            <div className="hidden md:block">•</div>
             <div>
               Contract: <span className="font-mono text-gray-400">{SALE_CONTRACT.slice(0, 6)}...{SALE_CONTRACT.slice(-4)}</span>
             </div>
+            <div className="hidden md:block">•</div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span>Last updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span>Live updates every 30s</span>
             </div>
+          </div>
+          
+          <div className="pt-4">
             <a 
-              href={`https://etherscan.io/address/${SALE_CONTRACT}`}
+              href={`https://sonar.xyz/token/eth/${SALE_CONTRACT}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-violet-400 hover:text-violet-300 transition"
+              className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition"
             >
-              View on Etherscan →
+              View on Sonar
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
             </a>
           </div>
         </div>
       </div>
     </main>
-  );
-}
-
-function Stat({ label, value, loading }: { 
-  label: string; 
-  value: number; 
-  loading?: boolean;
-}) {
-  const isPositive = value >= 0;
-  
-  return (
-    <div className="rounded-2xl bg-white/5 p-6 text-center border border-white/10">
-      <div className="text-gray-400 text-sm mb-2">{label}</div>
-      <div className={`text-2xl font-semibold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-        {loading && value === 0 ? (
-          <span className="opacity-50">--</span>
-        ) : (
-          `${isPositive ? '+' : ''}$${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-        )}
-      </div>
-      <div className="text-xs text-gray-500 mt-2">
-        {isPositive ? 'Increase' : 'Decrease'} in period
-      </div>
-    </div>
   );
 }
