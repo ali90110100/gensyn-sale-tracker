@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Gensyn Sale Tracker',
-  description: 'Live tracking of Gensyn public sale commitments',
+  title: 'Gensyn Sale Tracker | Live Investment Dashboard',
+  description: 'Real-time tracking of Gensyn public sale investments on Sonar. Monitor USDC & USDT commitments live.',
 }
 
 export default function RootLayout({
@@ -15,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className="dark">
+      <body className={`${inter.className} bg-black`}>
         {children}
       </body>
     </html>
