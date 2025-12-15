@@ -29,87 +29,88 @@ export default function Page() {
   }, []);
 
   async function load() {
-    if (!process.env.NEXT_PUBLIC_RPC) {
-      console.error("RPC endpoint not configured");
-      setLoading(false);
-      return;
-    }
+  if (!process.env.NEXT_PUBLIC_RPC) {
+    console.error("RPC endpoint not configured");
+    setLoading(false);
+    return;
+  }
 
-    try {
-      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC);
-      const usdc = new ethers.Contract(USDC, ERC20_ABI, provider);
-      const usdt = new ethers.Contract(USDT, ERC20_ABI, provider);
+  try {
+    const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_RPC);
+    const usdc = new ethers.Contract(USDC, ERC20_ABI, provider);
+    const usdt = new ethers.Contract(USDT, ERC20_ABI, provider);
 
-      const [usdcBal, usdtBal] = await Promise.all([
-        usdc.balanceOf(SALE_CONTRACT),
-        usdt.balanceOf(SALE_CONTRACT)
-      ]);
+    const [usdcBal, usdtBal] = await Promise.all([
+      usdc.balanceOf(SALE_CONTRACT),
+      usdt.balanceOf(SALE_CONTRACT)
+    ]);
 
-      const usdcValue = Number(ethers.formatUnits(usdcBal, 6));
-      const usdtValue = Number(ethers.formatUnits(usdtBal, 6));
-      const value = usdcValue + usdtValue;
+    const usdcValue = Number(ethers.formatUnits(usdcBal, 6));
+    const usdtValue = Number(ethers.formatUnits(usdtBal, 6));
+    const value = usdcValue + usdtValue;
+    
+    setUsdcAmount(usdcValue);
+    setUsdtAmount(usdtValue);
+    setTotal(value);
+
+    // Create timestamp for update
+    const now = new Date();
+    setLastUpdate(now.toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    }));
+
+    // Calculate changes
+    if (typeof window !== 'undefined') {
+      const currentHour = now.getHours();
+      const currentDate = now.getDate();
       
-      setUsdcAmount(usdcValue);
-      setUsdtAmount(usdtValue);
-      setTotal(value);
+      // Get stored values
+      const storedHourly = localStorage.getItem("gensyn_hourly_value");
+      const storedHourlyTime = localStorage.getItem("gensyn_hourly_time");
+      
+      const storedDaily = localStorage.getItem("gensyn_daily_value");
+      const storedDailyDate = localStorage.getItem("gensyn_daily_date");
 
-      // Calculate changes
-      if (typeof window !== 'undefined') {
-        const now = new Date();
-        const currentHour = now.getHours();
-        
-        // Get stored values
-        const storedHourly = localStorage.getItem("gensyn_hourly_value");
-        const storedHourlyTime = localStorage.getItem("gensyn_hourly_time");
-        
-        const storedDaily = localStorage.getItem("gensyn_daily_value");
-        const storedDailyDate = localStorage.getItem("gensyn_daily_date");
-
-        // Calculate hourly change (if same hour)
-        if (storedHourly && storedHourlyTime) {
-          const storedHour = parseInt(storedHourlyTime);
-          if (storedHour === currentHour) {
-            setHourlyChange(value - parseFloat(storedHourly));
-          } else {
-            setHourlyChange(0);
-          }
-        }
-
-        // Calculate daily change (if same day)
-        const currentDate = now.getDate();
-        if (storedDaily && storedDailyDate) {
-          const storedDate = parseInt(storedDailyDate);
-          if (storedDate === currentDate) {
-            setDailyChange(value - parseFloat(storedDaily));
-          } else {
-            setDailyChange(0);
-          }
-        }
-
-        // Store current values
-        localStorage.setItem("gensyn_hourly_value", value.toString());
-        localStorage.setItem("gensyn_hourly_time", currentHour.toString());
-        
-        // Reset daily at midnight
-        if (now.getHours() === 0 && now.getMinutes() < 1) {
-          localStorage.setItem("gensyn_daily_value", value.toString());
-          localStorage.setItem("gensyn_daily_date", currentDate.toString());
-        } else if (!storedDailyDate) {
-          localStorage.setItem("gensyn_daily_value", value.toString());
-          localStorage.setItem("gensyn_daily_date", currentDate.toString());
+      // Calculate hourly change (if same hour)
+      if (storedHourly && storedHourlyTime) {
+        const storedHour = parseInt(storedHourlyTime);
+        if (storedHour === currentHour) {
+          setHourlyChange(value - parseFloat(storedHourly));
+        } else {
+          setHourlyChange(0);
         }
       }
 
-      setLastUpdate(now.toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      }));
-    } catch (err) {
-      console.error("Failed to load sale data:", err);
-    } finally {
-      setLoading(false);
+      // Calculate daily change (if same day)
+      if (storedDaily && storedDailyDate) {
+        const storedDate = parseInt(storedDailyDate);
+        if (storedDate === currentDate) {
+          setDailyChange(value - parseFloat(storedDaily));
+        } else {
+          setDailyChange(0);
+        }
+      }
+
+      // Store current values
+      localStorage.setItem("gensyn_hourly_value", value.toString());
+      localStorage.setItem("gensyn_hourly_time", currentHour.toString());
+      
+      // Reset daily at midnight
+      if (now.getHours() === 0 && now.getMinutes() < 1) {
+        localStorage.setItem("gensyn_daily_value", value.toString());
+        localStorage.setItem("gensyn_daily_date", currentDate.toString());
+      } else if (!storedDailyDate) {
+        localStorage.setItem("gensyn_daily_value", value.toString());
+        localStorage.setItem("gensyn_daily_date", currentDate.toString());
+      }
     }
+  } catch (err) {
+    console.error("Failed to load sale data:", err);
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0f0f1a] to-[#0a0a14] text-white p-4 md:p-8">
