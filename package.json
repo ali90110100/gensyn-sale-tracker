@@ -14,8 +14,8 @@
     "ethers": "^6.9.0"
   },
   "devDependencies": {
-    "typescript": "^6.8.0",
-    "@types/react": "^18.2.14",
-    "@types/node": "^20.4.2"
-  }
+  "typescript": "^5.3.3",
+  "@types/react": "^19.2.0",
+  "@types/node": "^20.10.0"
+}
 }
